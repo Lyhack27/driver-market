@@ -1,645 +1,614 @@
-import React, { useState, useRef } from 'react';
-import { ShoppingCart, Plus, Minus, Trash2, ChevronLeft, Smartphone, CheckCircle, Zap, Cookie, Smile, Sparkles, Wind, CreditCard, ExternalLink, Settings, Save, X, Upload, Image as ImageIcon, Maximize, Minimize } from 'lucide-react';
+import React, { useState, useRef, useEffect, Component } from 'react';
+import { ShoppingCart, Plus, Minus, Trash2, ChevronLeft, CheckCircle, Zap, Cookie, Smile, Sparkles, Wind, Settings, X, Upload, Lock, Image as ImageIcon, LayoutGrid, List } from 'lucide-react';
 
-// Datos Iniciales (Default) - Colores actualizados a tonos obscuros/tenues
-const INITIAL_PRODUCTS = [
-  { id: 1, name: "Monster Energy", price: 3.50, category: "drinks", color: "bg-emerald-900/40 text-emerald-300", iconType: "zap", image: null, imageFit: 'contain' },
-  { id: 2, name: "Protein Bar", price: 2.50, category: "snacks", color: "bg-orange-900/40 text-orange-300", iconType: "cookie", image: null, imageFit: 'contain' },
-  { id: 3, name: "Assorted Sweets", price: 2.00, category: "snacks", color: "bg-pink-900/40 text-pink-300", iconType: "smile", image: null, imageFit: 'contain' },
-  { id: 4, name: "Cool Mints", price: 1.50, category: "snacks", color: "bg-cyan-900/40 text-cyan-300", iconType: "sparkles", image: null, imageFit: 'contain' },
-  { id: 5, name: "Axe Spray (Men)", price: 5.00, category: "essentials", color: "bg-slate-700/50 text-slate-300", iconType: "wind", image: null, imageFit: 'contain' },
-  { id: 6, name: "Axe Spray (Women)", price: 5.00, category: "essentials", color: "bg-purple-900/40 text-purple-300", iconType: "wind", image: null, imageFit: 'contain' },
+// ==============================================
+// 1. SAFETY SYSTEM
+// ==============================================
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError(error) { return { hasError: true }; }
+  handleReset = () => { localStorage.clear(); window.location.reload(); };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-slate-950 text-white flex flex-col items-center justify-center z-[9999] p-8 text-center">
+          <div className="bg-red-500/10 p-6 rounded-full mb-6">
+             <Zap size={64} className="text-red-500" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
+          <p className="text-slate-400 mb-8">System encountered an unexpected error.</p>
+          <button onClick={this.handleReset} className="bg-red-600 px-8 py-4 rounded-xl font-bold shadow-lg active:scale-95 transition-transform">
+            SYSTEM RESET
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ==============================================
+// 2. UTILITIES
+// ==============================================
+const DEFAULT_PRODUCTS = [
+  { id: 1, name: "Monster Energy", price: 3.50, category: "drinks", color: "bg-slate-800", iconType: "zap", image: null },
+  { id: 2, name: "Protein Bar", price: 2.50, category: "snacks", color: "bg-slate-800", iconType: "cookie", image: null },
 ];
 
-// Helper para renderizar iconos dinámicamente
 const getIcon = (type, className) => {
-  switch(type) {
-    case 'zap': return <Zap className={className} />;
-    case 'cookie': return <Cookie className={className} />;
-    case 'smile': return <Smile className={className} />;
-    case 'sparkles': return <Sparkles className={className} />;
-    case 'wind': return <Wind className={className} />;
-    default: return <Zap className={className} />;
-  }
+  const icons = { zap: Zap, cookie: Cookie, smile: Smile, sparkles: Sparkles, wind: Wind };
+  const Icon = icons[type] || Zap;
+  return <Icon className={className} />;
 };
 
-// Componente de Tarjeta de Producto (Reutilizable para Preview y Menú)
-const ProductCard = ({ product, cartQuantity, onAdd, isPreview = false }) => {
-  return (
-    <div 
-      onClick={!isPreview ? onAdd : undefined}
-      className={`bg-slate-900 rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-800 transition-all flex flex-col items-center text-center h-56 lg:h-64 justify-between relative group ${
-        !isPreview ? 'cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 active:scale-95' : 'opacity-100 cursor-default pointer-events-none'
-      }`}
-    >
-      {/* Quantity Badge (Solo en modo real) */}
-      {!isPreview && cartQuantity > 0 && (
-        <div className="absolute top-3 right-3 bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-lg shadow-blue-900/50 animate-bounce-short border border-blue-400">
-          {cartQuantity}
+const safeLoad = (key, fallback) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : fallback;
+  } catch { return fallback; }
+};
+
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    if (file.size > 5 * 1024 * 1024) { reject(new Error("Image too large (>5MB).")); return; }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 300; 
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } 
+        else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    };
+    reader.onerror = reject;
+  });
+};
+
+// ==============================================
+// 3. COMPONENTS
+// ==============================================
+
+// Payment Buttons (Visual)
+const PaymentMethodButton = ({ type, active }) => (
+  <div className={`h-16 w-full rounded-xl flex items-center justify-center gap-2 border transition-all duration-200 cursor-pointer ${active ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-slate-800 border-slate-700 text-slate-400 opacity-60 grayscale hover:grayscale-0 hover:opacity-100'}`}>
+    {type === 'card' ? (
+       <div className="flex flex-col items-center">
+          <div className="font-bold text-white text-sm">Credit Card</div>
+          <div className="text-[10px] text-slate-400">Visa / MC / Amex</div>
+       </div>
+    ) : (
+       <div className="flex items-center gap-2">
+         <span className="font-bold text-white text-lg tracking-tight">Pay</span>
+         <span className="bg-white text-black text-xs font-bold px-1.5 py-0.5 rounded">App</span>
+       </div>
+    )}
+  </div>
+);
+
+// Product Card
+const ProductCard = ({ product, cartQuantity, onAdd }) => (
+  <button 
+    onClick={onAdd}
+    className="relative flex flex-col p-0 bg-slate-900 border border-slate-800 rounded-3xl shadow-lg active:scale-[0.98] transition-all duration-200 outline-none group hover:border-blue-500/50 hover:shadow-blue-900/20 w-full h-64 overflow-hidden text-left"
+  >
+    {cartQuantity > 0 && (
+      <div className="absolute top-3 right-3 bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-lg animate-in zoom-in duration-200 z-10 border-2 border-slate-900">
+        {cartQuantity}
+      </div>
+    )}
+    
+    {/* Rectangle Image */}
+    <div className="w-full h-36 bg-slate-950 flex items-center justify-center overflow-hidden relative">
+      {product.image ? (
+        <img src={product.image} alt={product.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-slate-800/50">
+           {getIcon(product.iconType, "w-12 h-12 text-slate-600 group-hover:text-blue-400 transition-colors")}
         </div>
       )}
-      
-      {/* Contenedor de Imagen/Icono - Usamos el color definido en el producto */}
-      <div className={`w-24 h-24 lg:w-28 lg:h-28 rounded-full flex items-center justify-center mb-2 overflow-hidden ${product.image ? 'bg-transparent' : product.color}`}>
-        {product.image ? (
-          <img 
-            src={product.image} 
-            alt={product.name} 
-            className={`w-full h-full ${product.imageFit === 'cover' ? 'object-cover' : 'object-contain drop-shadow-lg'}`} 
-          />
-        ) : (
-          // El color del icono se hereda del contenedor padre via product.color (text-color-300)
-          getIcon(product.iconType, "w-10 h-10 lg:w-12 lg:h-12 opacity-90")
-        )}
-      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80"></div>
+    </div>
 
+    <div className="p-4 flex flex-col justify-between flex-1 w-full relative z-0">
       <div>
-        <h3 className="font-bold text-lg lg:text-xl text-slate-100 leading-tight mb-1 line-clamp-2">
-          {product.name || "Product Name"}
-        </h3>
-        <p className="text-slate-400 font-medium">
-          ${product.price ? parseFloat(product.price).toFixed(2) : "0.00"}
-        </p>
+        <h3 className="text-base font-bold text-white leading-tight mb-1 line-clamp-2">{product.name}</h3>
+        <p className="text-blue-400 font-bold text-lg">${parseFloat(product.price).toFixed(2)}</p>
       </div>
-
-      <button className={`mt-2 w-full py-2 bg-slate-800 text-blue-400 rounded-lg font-semibold text-sm lg:text-base transition-colors border border-slate-700 ${!isPreview ? 'group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500' : ''}`}>
+      <div className="mt-2 w-full py-1.5 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold uppercase tracking-wider text-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
         Add to Order
-      </button>
+      </div>
+    </div>
+  </button>
+);
+
+// PIN Pad Modal (Admin Access)
+const PinPad = ({ onComplete, onCancel }) => {
+  const [pin, setPin] = useState("");
+  
+  const handlePress = (n) => {
+    if (n === "del") setPin(p => p.slice(0, -1));
+    else if (n === "clear") setPin("");
+    else if (pin.length < 4) {
+      const newP = pin + n;
+      setPin(newP);
+      if (newP.length === 4) setTimeout(() => onComplete(newP), 300);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-[340px] bg-slate-900 border border-slate-800 rounded-[2rem] p-6 shadow-2xl flex flex-col items-center relative">
+        <button onClick={onCancel} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={24}/></button>
+        
+        <Lock size={32} className="text-blue-500 mb-4" />
+        <h2 className="text-xl font-bold text-white mb-6">Enter Admin PIN</h2>
+        
+        <div className="flex gap-4 mb-8 h-4">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className={`w-3 h-3 rounded-full transition-all duration-200 ${i < pin.length ? 'bg-blue-500 scale-125 shadow-[0_0_10px_#3b82f6]' : 'bg-slate-800'}`} />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 w-full mb-2">
+          {[1,2,3,4,5,6,7,8,9].map((n) => (
+            <button key={n} onClick={() => handlePress(n)} className="h-16 w-full rounded-2xl bg-slate-800 text-2xl font-medium text-white hover:bg-slate-700 active:scale-95 transition-all border border-slate-700/50">
+              {n}
+            </button>
+          ))}
+          <button onClick={() => handlePress("clear")} className="h-16 w-full rounded-2xl bg-slate-800/50 text-lg font-medium text-slate-400 hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center">C</button>
+          <button onClick={() => handlePress(0)} className="h-16 w-full rounded-2xl bg-slate-800 text-2xl font-medium text-white hover:bg-slate-700 active:scale-95 transition-all border border-slate-700/50">0</button>
+          <button onClick={() => handlePress("del")} className="h-16 w-full rounded-2xl bg-slate-800/50 text-red-400 hover:bg-red-900/20 active:scale-95 transition-all flex items-center justify-center"><ChevronLeft size={28}/></button>
+        </div>
+      </div>
     </div>
   );
 };
 
+// ==============================================
+// 4. MAIN APPLICATION
+// ==============================================
 const KioscoApp = () => {
-  // Estados
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [status, setStatus] = useState('loading'); 
+  const [products, setProducts] = useState([]);
+  const [config, setConfig] = useState(null);
   const [cart, setCart] = useState([]);
-  const [view, setView] = useState('menu'); // menu, payment, success, admin
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  // UI State
+  const [showPinPad, setShowPinPad] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [adminMsg, setAdminMsg] = useState(''); // Visual feedback
 
-  // Estado Admin
-  const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'drinks', image: null, imageFit: 'contain' });
+  // Admin Form State
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'drinks', image: null });
   const fileInputRef = useRef(null);
 
-  // --- FUNCIONES DE ADMINISTRACIÓN ---
-  
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewProduct(prev => ({ ...prev, image: reader.result }));
-      };
-      reader.readAsDataURL(file);
+  // INITIALIZATION
+  useEffect(() => {
+    const savedConfig = safeLoad('kiosco_config', null);
+    const savedProducts = safeLoad('kiosco_products', DEFAULT_PRODUCTS);
+
+    if (savedConfig && savedConfig.pin) {
+      setConfig(savedConfig);
+      setProducts(savedProducts);
+      setStatus('menu');
+    } else {
+      setStatus('setup');
+    }
+  }, []);
+
+  // --- LOGIC ---
+
+  const finishSetup = (data) => {
+    setConfig(data);
+    setProducts(DEFAULT_PRODUCTS);
+    localStorage.setItem('kiosco_config', JSON.stringify(data));
+    localStorage.setItem('kiosco_products', JSON.stringify(DEFAULT_PRODUCTS));
+    setStatus('menu');
+  };
+
+  const saveProducts = (list) => {
+    try {
+      const str = JSON.stringify(list);
+      if (str.length > 4500000) throw new Error("Quota");
+      localStorage.setItem('kiosco_products', str);
+      setProducts(list);
+      return true;
+    } catch (e) {
+      alert("Storage full. Saving without image.");
+      const cleanList = list.map(p => p.id === newProduct.id ? {...p, image: null} : p);
+      setProducts(cleanList);
+      localStorage.setItem('kiosco_products', JSON.stringify(cleanList));
+      return false;
     }
   };
 
   const handleAddProduct = () => {
-    if (!newProduct.name || !newProduct.price) return;
+    const name = newProduct.name.trim();
+    const price = parseFloat(newProduct.price);
 
-    // Asignar colores tenues basados en la categoría
-    let colorClass = "bg-slate-700/50 text-slate-300";
-    if (newProduct.category === 'drinks') colorClass = "bg-blue-900/40 text-blue-300";
-    if (newProduct.category === 'snacks') colorClass = "bg-orange-900/40 text-orange-300";
-    if (newProduct.category === 'essentials') colorClass = "bg-purple-900/40 text-purple-300";
+    if (!name || isNaN(price)) {
+      setAdminMsg("Error: Invalid Name or Price");
+      setTimeout(() => setAdminMsg(""), 3000);
+      return;
+    }
 
-    const newItem = {
-      id: Date.now(),
-      name: newProduct.name,
-      price: parseFloat(newProduct.price),
-      category: newProduct.category,
-      color: colorClass,
-      iconType: 'zap', 
-      image: newProduct.image, 
-      imageFit: newProduct.imageFit
+    const newItem = { 
+      ...newProduct, 
+      name, 
+      price: price, 
+      id: Date.now(), 
+      color: 'bg-slate-800', 
+      iconType: 'zap' 
     };
-
-    setProducts([...products, newItem]);
-    setNewProduct({ name: '', price: '', category: 'drinks', image: null, imageFit: 'contain' });
+    
+    saveProducts([...products, newItem]);
+    setNewProduct({ name: '', price: '', category: 'drinks', image: null });
     if (fileInputRef.current) fileInputRef.current.value = "";
+    
+    // Feedback message
+    setAdminMsg("Product Added Successfully!");
+    setTimeout(() => setAdminMsg(""), 3000);
   };
 
-  const handleDeleteProduct = (id) => {
-    setProducts(products.filter(p => p.id !== id));
+  const handleImage = async (e) => {
+    if (e.target.files[0]) {
+      try {
+        const b64 = await compressImage(e.target.files[0]);
+        setNewProduct(prev => ({ ...prev, image: b64 }));
+      } catch (err) { alert(err.message); }
+    }
   };
 
-  // --- FUNCIONES DEL CARRITO ---
-  const addToCart = (product) => {
+  const handlePay = () => {
+    // 1. Calculate total
+    const totalAmount = cart.reduce((sum, i) => sum + (parseFloat(i.price) * i.quantity), 0);
+    
+    if (totalAmount <= 0) return;
+
+    setIsProcessing(true);
+
+    // 2. Attempt Square Deep Link
+    if (config?.squareAppId) {
+        const params = {
+          amount_money: { amount: Math.round(totalAmount * 100), currency_code: "USD" },
+          callback_url: window.location.href,
+          client_id: config.squareAppId,
+          version: "1.3",
+          notes: "Kiosco Order",
+          options: { supported_tender_types: ["CREDIT_CARD", "CONTACTLESS", "CASH"] }
+        };
+        
+        try {
+             const url = `square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify(params))}`;
+             // window.location.href = url; 
+        } catch (e) {
+            console.log("Could not open native app");
+        }
+    }
+
+    // 3. Simulate Process
+    setTimeout(() => { 
+      setIsProcessing(false); 
+      setShowPayment(false); 
+      setShowSuccess(true); 
+      setCart([]); 
+      setTimeout(() => setShowSuccess(false), 3000); 
+    }, 2500);
+  };
+
+  const updateCart = (p, delta) => {
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => 
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [...prev, { ...product, quantity: 1 }];
+      const exists = prev.find(i => i.id === p.id);
+      if (!exists && delta > 0) return [...prev, { ...p, quantity: 1 }];
+      return prev.map(i => i.id === p.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0);
     });
   };
 
-  const removeFromCart = (id) => {
-    setCart(prev => prev.filter(item => item.id !== id));
-  };
+  const cartTotal = cart.reduce((a,b) => a + (parseFloat(b.price||0) * (b.quantity||0)), 0);
 
-  const updateQuantity = (id, delta) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQuantity = Math.max(0, item.quantity + delta);
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    }).filter(item => item.quantity > 0));
-  };
+  // --- RENDER ---
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-  // --- LÓGICA DE PAGO ---
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
-    setView('payment');
-  };
-
-  const handleSquarePayment = () => {
-    const amountCents = Math.round(cartTotal * 100);
-    const currencyCode = "USD"; 
-    
-    const paymentParams = {
-      amount_money: { amount: amountCents, currency_code: currencyCode },
-      callback_url: "https://google.com", 
-      client_id: "sq0idp-PLACEHOLDER-ID", 
-      version: "1.3",
-      notes: "Ride Market Order", 
-      options: { supported_tender_types: ["CREDIT_CARD", "CONTACTLESS", "CASH", "OTHER"] }
-    };
-
-    const squareUrl = `square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify(paymentParams))}`;
-    window.location.href = squareUrl;
-    setIsProcessing(true);
-    setTimeout(() => setIsProcessing(false), 3000);
-  };
-
-  const simulatePaymentSuccess = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setView('success');
-      setTimeout(() => {
-        setCart([]);
-        setView('menu');
-      }, 5000);
-    }, 2000);
-  };
-
-  // UI Components
-  const CategoryButton = ({ id, label }) => (
-    <button 
-      onClick={() => setCategoryFilter(id)}
-      className={`px-4 py-2 lg:px-6 lg:py-3 rounded-full text-sm lg:text-lg font-medium transition-all whitespace-nowrap border ${
-        categoryFilter === id 
-        ? 'bg-blue-700 text-white border-blue-600 shadow-lg shadow-blue-900/50 scale-105' 
-        : 'bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800 hover:text-white'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
-  const filteredProducts = categoryFilter === 'all' 
-    ? products 
-    : products.filter(p => p.category === categoryFilter);
-
-  // --- VISTA: ADMIN PANEL ---
-  if (view === 'admin') {
+  if (status === 'loading') return <div className="h-screen bg-slate-950 text-white flex items-center justify-center animate-pulse">System Loading...</div>;
+  
+  // SETUP SCREEN (Responsive Fix)
+  if (status === 'setup') {
     return (
-      <div className="min-h-screen bg-slate-950 p-4 lg:p-8">
-        <div className="max-w-5xl mx-auto bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden">
-          {/* Header Admin */}
-          <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center">
-             <h2 className="text-2xl lg:text-3xl font-bold flex items-center gap-3 text-slate-100">
-               <Settings className="w-8 h-8 text-blue-500" />
-               Driver Inventory
-             </h2>
-             <button 
-               onClick={() => setView('menu')}
-               className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2 rounded-full font-semibold transition-colors border border-slate-700"
-             >
-               Exit Admin Mode
-             </button>
-          </div>
-
-          <div className="p-6 lg:p-8 flex flex-col lg:flex-row gap-8">
-            {/* Columna Izquierda: Formulario */}
-            <div className="flex-1 space-y-8">
-              <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800">
-                <h3 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-2">
-                  <Plus className="w-5 h-5" /> Add New Product
-                </h3>
-                
-                <div className="space-y-4">
-                  {/* Input Nombre */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Product Name</label>
-                    <input 
-                      type="text" 
-                      value={newProduct.name}
-                      onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
-                      className="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="e.g. Water Bottle"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Input Precio */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-1">Price ($)</label>
-                      <input 
-                        type="number" 
-                        value={newProduct.price}
-                        onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
-                        className="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    {/* Input Categoria */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-400 mb-1">Category</label>
-                      <select 
-                        value={newProduct.category}
-                        onChange={(e) => setNewProduct({...newProduct, category: e.target.value})}
-                        className="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                      >
-                        <option value="drinks">Drinks</option>
-                        <option value="snacks">Snacks</option>
-                        <option value="essentials">Essentials</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Input Imagen */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-400 mb-1">Product Image</label>
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => fileInputRef.current.click()}
-                        className="flex-1 p-3 bg-slate-800 border border-dashed border-slate-600 rounded-lg text-slate-400 hover:bg-slate-700 hover:border-blue-500 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Upload size={20} />
-                        {newProduct.image ? "Change Image" : "Upload Image"}
-                      </button>
-                      <input 
-                        type="file"
-                        accept="image/*"
-                        ref={fileInputRef}
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                      {newProduct.image && (
-                        <button 
-                           onClick={() => {
-                             setNewProduct({...newProduct, image: null});
-                             if(fileInputRef.current) fileInputRef.current.value = "";
-                           }}
-                           className="p-3 text-red-400 bg-red-900/20 border border-red-900/30 rounded-lg hover:bg-red-900/30"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Selector de Estilo de Imagen */}
-                  {newProduct.image && (
-                    <div className="bg-slate-800 p-3 rounded-lg border border-slate-700">
-                      <label className="block text-sm font-medium text-slate-400 mb-2">Image Style</label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setNewProduct({ ...newProduct, imageFit: 'contain' })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-                            newProduct.imageFit === 'contain' 
-                            ? 'bg-blue-900/40 text-blue-300 border border-blue-800' 
-                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                          }`}
-                        >
-                          <Minimize size={16} />
-                          Fit (Transparent)
-                        </button>
-                        <button
-                          onClick={() => setNewProduct({ ...newProduct, imageFit: 'cover' })}
-                          className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-                            newProduct.imageFit === 'cover' 
-                            ? 'bg-blue-900/40 text-blue-300 border border-blue-800' 
-                            : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-                          }`}
-                        >
-                          <Maximize size={16} />
-                          Fill (Photo)
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-2">
-                        {newProduct.imageFit === 'contain' 
-                          ? "Best for PNGs without background."
-                          : "Best for normal photos. Crops edges."
-                        }
-                      </p>
-                    </div>
-                  )}
-
-                  <button 
-                    onClick={handleAddProduct}
-                    disabled={!newProduct.name || !newProduct.price}
-                    className={`w-full p-4 rounded-xl font-bold transition-all flex justify-center items-center gap-2 mt-4 ${
-                      !newProduct.name || !newProduct.price 
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-900/50 border border-blue-500'
-                    }`}
-                  >
-                    <Save size={20} /> Save Product
-                  </button>
-                </div>
-              </div>
+      <div className="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="w-11/12 max-w-md bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl flex flex-col animate-in zoom-in duration-300 my-auto">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 bg-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-900/20">
+                <Settings size={40} className="text-white" />
             </div>
-
-            {/* Columna Derecha: Previsualización e Inventario */}
-            <div className="w-full lg:w-1/3 flex flex-col gap-8">
-               {/* Previsualización */}
-               <div>
-                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Live Preview</h3>
-                  <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800 flex justify-center items-center relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'radial-gradient(#475569 1px, transparent 1px)', backgroundSize: '10px 10px'}}></div>
-                    
-                    <div className="w-48 pointer-events-none transform scale-90 origin-center">
-                       <ProductCard 
-                          product={{
-                            ...newProduct, 
-                            // Simular color en preview
-                            color: newProduct.category === 'drinks' ? 'bg-blue-900/40 text-blue-300' : newProduct.category === 'snacks' ? 'bg-orange-900/40 text-orange-300' : 'bg-purple-900/40 text-purple-300',
-                            iconType: 'zap'
-                          }} 
-                          isPreview={true}
-                       />
-                    </div>
-                  </div>
-               </div>
-
-               {/* Lista Rápida */}
-               <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col overflow-hidden h-80">
-                 <div className="p-4 bg-slate-950 border-b border-slate-800 font-bold text-slate-300">
-                   Inventory ({products.length})
-                 </div>
-                 <div className="overflow-y-auto p-2">
-                   {products.map(p => (
-                     <div key={p.id} className="flex items-center justify-between p-3 hover:bg-slate-800 rounded-lg border-b border-slate-800 last:border-0 transition-colors">
-                       <div className="flex items-center gap-3">
-                         <div className={`w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center ${p.image ? 'bg-transparent' : 'bg-slate-800'}`}>
-                            {p.image ? (
-                              <img 
-                                src={p.image} 
-                                className={`w-full h-full ${p.imageFit === 'cover' ? 'object-cover' : 'object-contain'}`} 
-                                alt="" 
-                              />
-                            ) : (
-                              <div className="text-slate-400">
-                                {getIcon(p.iconType, "w-5 h-5")}
-                              </div>
-                            )}
-                         </div>
-                         <div>
-                           <div className="font-bold text-slate-200 text-sm">{p.name}</div>
-                           <div className="text-xs text-slate-500">${p.price.toFixed(2)}</div>
-                         </div>
-                       </div>
-                       <button 
-                          onClick={() => handleDeleteProduct(p.id)}
-                          className="text-red-400 hover:bg-red-900/20 p-2 rounded-lg transition-colors"
-                       >
-                         <Trash2 size={16} />
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-            </div>
+            <h1 className="text-2xl font-bold text-white">Initial Setup</h1>
+            <p className="text-slate-500 text-sm mt-2">Configure Kiosk for tablets</p>
           </div>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const pin = formData.get('pin');
+            const confirm = formData.get('confirm');
+            const squareId = formData.get('squareId');
+            if (pin.length !== 4) return alert("PIN must be 4 digits");
+            if (pin !== confirm) return alert("PINs do not match");
+            finishSetup({ pin, squareAppId: squareId || "test" });
+          }} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <input name="pin" type="tel" maxLength={4} className="bg-slate-950 border border-slate-700 p-4 rounded-xl text-white text-center text-xl outline-none focus:border-blue-500 transition-colors" placeholder="PIN" required />
+                <input name="confirm" type="tel" maxLength={4} className="bg-slate-950 border border-slate-700 p-4 rounded-xl text-white text-center text-xl outline-none focus:border-blue-500 transition-colors" placeholder="Confirm" required />
+            </div>
+            <input name="squareId" type="text" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl text-white outline-none focus:border-blue-500 transition-colors text-sm" placeholder="Square App ID (Optional)" />
+            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg shadow-lg mt-4 active:scale-95 transition-transform">Save & Launch</button>
+          </form>
         </div>
       </div>
     );
   }
 
-  // --- VISTA: MENU (Modificada con botón Admin) ---
-  if (view === 'menu') {
-    return (
-      <div className="flex h-screen bg-slate-950 font-sans overflow-hidden text-slate-200">
-        {/* Main Product Area */}
-        <div className="flex-1 flex flex-col h-full">
-          {/* Header */}
-          <header className="bg-slate-900 p-4 lg:p-6 shadow-md z-10 flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-slate-800">
-            <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
-              <div>
-                <h1 className="text-2xl lg:text-3xl font-bold text-slate-100 tracking-tight">Ride Market</h1>
-                <p className="text-sm lg:text-base text-slate-400">Refresh yourself during the ride</p>
-              </div>
-              {/* Botón Admin "Secreto" */}
-              <button 
-                onClick={() => setView('admin')}
-                className="text-slate-600 hover:text-slate-400 p-2 transition-colors"
-                title="Driver Settings"
-              >
-                <Settings size={24} />
-              </button>
-            </div>
-            <div className="flex gap-2 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0">
-               <CategoryButton id="all" label="All" />
-               <CategoryButton id="drinks" label="Drinks" />
-               <CategoryButton id="snacks" label="Snacks" />
-               <CategoryButton id="essentials" label="Essentials" />
-            </div>
-          </header>
-
-          {/* Product Grid */}
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 pb-24">
-              {filteredProducts.map(product => (
-                <ProductCard 
-                  key={product.id} 
-                  product={product} 
-                  cartQuantity={cart.find(item => item.id === product.id)?.quantity || 0}
-                  onAdd={() => addToCart(product)}
-                />
-              ))}
-            </div>
+  return (
+    <div className="flex h-screen bg-slate-950 text-white font-sans overflow-hidden selection:bg-blue-500/30">
+      
+      {/* MODAL: PIN PAD */}
+      {showPinPad && (
+        <PinPad 
+            onComplete={(enteredPin) => {
+                if(enteredPin === config.pin) {
+                    setShowPinPad(false);
+                    setShowAdmin(true);
+                } else {
+                    alert("Incorrect PIN"); 
+                }
+            }} 
+            onCancel={() => setShowPinPad(false)} 
+        />
+      )}
+      
+      {/* MODAL: SUCCESS */}
+      {showSuccess && (
+        <div className="fixed inset-0 bg-emerald-600 z-[100] flex flex-col items-center justify-center animate-in zoom-in duration-300">
+          <div className="bg-white rounded-full p-6 mb-6 shadow-2xl animate-bounce">
+             <CheckCircle size={80} className="text-emerald-600" />
           </div>
+          <h1 className="text-4xl md:text-6xl font-bold text-white text-center">Payment Successful!</h1>
+          <p className="text-emerald-100 mt-4 text-xl">Thank you for your purchase</p>
         </div>
+      )}
 
-        {/* Cart Sidebar (Right) */}
-        <div className="w-80 lg:w-96 bg-slate-900 shadow-2xl flex flex-col h-full z-20 border-l border-slate-800">
-          <div className="p-6 bg-slate-900 border-b border-slate-800">
-            <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-100">
-              <ShoppingCart className="w-6 h-6 text-blue-500" />
-              Your Order
-            </h2>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-4 opacity-60">
-                <ShoppingCart size={64} strokeWidth={1.5} />
-                <p className="text-lg text-center">Your cart is empty.<br/>Tap items to start.</p>
-              </div>
-            ) : (
-              cart.map(item => (
-                <div key={item.id} className="flex items-center justify-between bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-sm">
-                  <div className="flex-1">
-                    <h4 className="font-bold text-slate-200 text-sm lg:text-base">{item.name}</h4>
-                    <p className="text-blue-400 font-medium">${(item.price * item.quantity).toFixed(2)}</p>
-                  </div>
-                  <div className="flex items-center gap-2 lg:gap-3 bg-slate-900 rounded-lg p-1 border border-slate-700">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
-                      className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <span className="font-bold w-4 text-center text-slate-200">{item.quantity}</span>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}
-                      className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded text-blue-400 hover:bg-blue-900/30 hover:text-blue-300 transition-colors"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <button 
-                    onClick={() => removeFromCart(item.id)}
-                    className="ml-2 text-slate-600 hover:text-red-400 p-1 transition-colors"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="p-6 bg-slate-900 border-t border-slate-800 space-y-4">
-            <div className="flex justify-between text-xl font-bold text-slate-100">
-              <span>Total</span>
-              <span>${cartTotal.toFixed(2)}</span>
-            </div>
-            <button 
-              onClick={handleCheckout}
-              disabled={cart.length === 0}
-              className={`w-full py-4 rounded-xl text-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all border ${
-                cart.length === 0 
-                ? 'bg-slate-800 text-slate-600 cursor-not-allowed border-slate-700' 
-                : 'bg-blue-600 text-white hover:bg-blue-500 active:scale-95 border-blue-500 shadow-blue-900/20'
-              }`}
-            >
-              <span>Pay Now</span>
-              <ChevronLeft className="rotate-180" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- VIEW: PAYMENT ---
-  if (view === 'payment') {
-    return (
-      <div className="h-screen w-screen bg-slate-950 flex items-center justify-center p-6 relative">
-        <button 
-          onClick={() => setView('menu')}
-          className="absolute top-8 left-8 bg-slate-800 text-slate-200 p-4 rounded-full flex items-center gap-2 hover:bg-slate-700 transition-colors border border-slate-700"
-        >
-          <ChevronLeft size={32} />
-          <span className="font-bold text-lg">Back to Menu</span>
-        </button>
-
-        <div className="bg-slate-900 w-full max-w-4xl h-[80vh] rounded-3xl overflow-hidden flex shadow-2xl border border-slate-800">
-          <div className="w-1/2 bg-slate-900 p-8 lg:p-12 flex flex-col border-r border-slate-800">
-            <h2 className="text-3xl font-bold text-slate-100 mb-8">Order Summary</h2>
-            <div className="flex-1 overflow-y-auto space-y-4 pr-4">
-              {cart.map(item => (
-                <div key={item.id} className="flex justify-between items-center text-lg text-slate-300">
-                  <div className="flex gap-3 items-center">
-                    <span className="font-bold bg-blue-900/40 text-blue-300 px-3 py-1 rounded-md text-sm border border-blue-900/50">{item.quantity}x</span>
-                    <span className="leading-tight">{item.name}</span>
-                  </div>
-                  <span className="font-medium text-slate-100 whitespace-nowrap ml-2">${(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 pt-8 border-t-2 border-dashed border-slate-700">
-              <div className="flex justify-between text-4xl font-bold text-blue-400">
-                <span>Total</span>
-                <span>${cartTotal.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-1/2 p-8 lg:p-12 flex flex-col items-center justify-center text-center relative bg-slate-950">
+      {/* MODAL: PAYMENT & CHECKOUT */}
+      {showPayment && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 text-center shadow-2xl relative overflow-hidden animate-in slide-in-from-bottom-10 duration-300">
             {isProcessing ? (
-              <div className="flex flex-col items-center animate-pulse">
-                <div className="w-24 h-24 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-6"></div>
-                <h3 className="text-2xl font-bold text-slate-200">Opening Square...</h3>
-                <p className="text-slate-500 mt-2">Check your Square App to complete payment</p>
+              <div className="py-20 flex flex-col items-center">
+                <div className="relative w-24 h-24 mb-8">
+                    <div className="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <h2 className="text-3xl font-bold animate-pulse">Processing...</h2>
+                <p className="text-slate-400 mt-4">Follow instructions on terminal</p>
               </div>
             ) : (
               <>
-                <div className="bg-slate-800 p-4 rounded-2xl mb-6 shadow-xl border border-slate-700">
-                   <CreditCard className="w-16 h-16 text-slate-300" />
+                <div className="flex justify-between items-center mb-8">
+                     <button onClick={() => setShowPayment(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={24}/></button>
+                     <h3 className="font-bold text-slate-400 uppercase tracking-widest text-sm">Checkout</h3>
+                     <div className="w-10"></div>
                 </div>
-                <h2 className="text-3xl font-bold text-slate-100 mb-2">Complete Payment</h2>
-                <p className="text-slate-400 text-lg mb-8 max-w-xs">
-                  Tap below to open the Square Point of Sale app and process the payment of <strong className="text-white">${cartTotal.toFixed(2)}</strong>.
-                </p>
                 
-                <button
-                  onClick={handleSquarePayment}
-                  className="w-full max-w-xs py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xl shadow-lg shadow-blue-900/30 transform transition-all hover:scale-105 flex items-center justify-center gap-3 mb-6 border border-blue-500"
-                >
-                  <ExternalLink size={24} />
-                  <span>Pay with Square App</span>
+                <div className="mb-10">
+                    <h2 className="text-6xl font-bold text-white mb-2 tracking-tight">${cartTotal.toFixed(2)}</h2>
+                    <p className="text-slate-500 font-medium">Total to Pay</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <PaymentMethodButton type="card" active={true} />
+                  <PaymentMethodButton type="app" active={false} />
+                </div>
+
+                <button onClick={handlePay} className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white py-6 rounded-2xl text-2xl font-bold shadow-[0_10px_40px_-10px_rgba(37,99,235,0.5)] active:scale-95 flex items-center justify-center gap-3 transition-all">
+                  <Zap fill="currentColor" className="animate-pulse"/> Pay Now
                 </button>
-
-                <div className="relative w-full max-w-xs border-t border-slate-800 my-4">
-                   <span className="absolute top-[-10px] left-1/2 transform -translate-x-1/2 bg-slate-950 px-3 text-slate-600 text-sm">or</span>
-                </div>
-
-                <div className="flex flex-col items-center opacity-80">
-                   <p className="text-sm text-slate-500 mb-2">Scan to pay on your phone</p>
-                   <img 
-                     src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://example.com/pay/${cartTotal}`} 
-                     alt="Payment QR" 
-                     className="w-24 h-24 rounded-lg border border-slate-700 opacity-80 hover:opacity-100 transition-opacity"
-                   />
-                   <button 
-                    onClick={simulatePaymentSuccess}
-                    className="mt-4 text-xs text-slate-600 hover:text-blue-400 underline"
-                  >
-                    (Simulate Success without Square)
-                  </button>
-                </div>
               </>
             )}
           </div>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  // --- VIEW: SUCCESS ---
-  if (view === 'success') {
-    return (
-      <div className="h-screen w-screen bg-emerald-900 flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in zoom-in duration-500">
-        <div className="bg-white text-emerald-600 rounded-full p-6 mb-8 shadow-2xl animate-bounce">
-          <CheckCircle size={120} />
+      {/* MODAL: ADMIN PANEL */}
+      {showAdmin && (
+        <div className="fixed inset-0 bg-slate-950 z-50 flex flex-col animate-in slide-in-from-right duration-300">
+          {/* Admin Header */}
+          <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
+            <h1 className="text-xl font-bold text-white flex items-center gap-2"><Settings className="text-blue-500"/> Admin Panel</h1>
+            <button onClick={() => setShowAdmin(false)} className="bg-slate-800 hover:bg-slate-700 px-6 py-2 rounded-xl font-bold text-sm transition-colors">Exit</button>
+          </div>
+          
+          {/* Admin Content */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 max-w-5xl mx-auto w-full">
+            
+            {/* Add Product Form */}
+            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 mb-8 shadow-xl">
+              <h3 className="text-lg font-bold mb-4 text-slate-300 flex items-center gap-2"><Plus size={18} /> Add Product</h3>
+              
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                <div className="flex-1 space-y-2">
+                    <label className="text-xs text-slate-500 ml-2 uppercase font-bold">Name</label>
+                    <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 outline-none focus:border-blue-500 transition-colors" placeholder="Ex. Coca Cola" value={newProduct.name} onChange={e=>setNewProduct({...newProduct, name:e.target.value})} />
+                </div>
+                <div className="w-full md:w-40 space-y-2">
+                    <label className="text-xs text-slate-500 ml-2 uppercase font-bold">Price</label>
+                    <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 outline-none focus:border-blue-500 transition-colors" type="number" placeholder="0.00" value={newProduct.price} onChange={e=>setNewProduct({...newProduct, price:e.target.value})} />
+                </div>
+                <div className="w-full md:w-48 space-y-2">
+                    <label className="text-xs text-slate-500 ml-2 uppercase font-bold">Category</label>
+                    <select className="w-full bg-slate-950 p-4 rounded-xl border border-slate-700 outline-none focus:border-blue-500" value={newProduct.category} onChange={e=>setNewProduct({...newProduct, category:e.target.value})}>
+                        <option value="drinks">Drinks</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="essentials">Essentials</option>
+                    </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <input type="file" hidden ref={fileInputRef} onChange={handleImage} accept="image/*" />
+                  <button onClick={()=>fileInputRef.current.click()} className={`flex-1 w-full py-4 rounded-xl border border-dashed flex justify-center gap-3 items-center font-medium transition-colors ${newProduct.image ? 'border-green-500 bg-green-500/10 text-green-500' : 'border-slate-600 hover:border-slate-400 text-slate-400'}`}>
+                    {newProduct.image ? <><ImageIcon size={20}/> Image Ready</> : <><Upload size={20}/> Upload Image</>}
+                  </button>
+                  
+                  <button onClick={handleAddProduct} className="w-full md:w-auto px-8 py-4 bg-blue-600 rounded-xl font-bold hover:bg-blue-500 transition-colors shadow-lg shadow-blue-900/20 text-white">
+                    Save Product
+                  </button>
+              </div>
+              
+              {/* Feedback Message */}
+              {adminMsg && (
+                 <div className={`mt-4 p-3 rounded-xl text-center font-bold animate-in fade-in slide-in-from-top-2 ${adminMsg.includes('Error') ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                    {adminMsg}
+                 </div>
+              )}
+            </div>
+
+            {/* Product List */}
+            <div className="space-y-3 pb-20">
+              <h3 className="text-lg font-bold mb-4 text-slate-300 flex items-center gap-2"><List size={18}/> Current Inventory</h3>
+              {products.map(p => (
+                <div key={p.id} className="flex justify-between items-center bg-slate-900 p-3 rounded-2xl border border-slate-800 hover:border-slate-700 transition-colors group">
+                  <div className="flex items-center gap-4 overflow-hidden">
+                    {/* Thumbnail visual fix */}
+                    <div className="w-16 h-16 bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shrink-0 relative">
+                      {p.image ? (
+                          <img src={p.image} className="w-full h-full object-cover" alt={p.name}/>
+                      ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-700"><Zap size={20}/></div>
+                      )}
+                    </div>
+                    
+                    <div className="min-w-0">
+                        <div className="font-bold text-white truncate text-lg">{p.name}</div>
+                        <div className="text-slate-500 text-sm capitalize flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${p.category==='drinks' ? 'bg-blue-500': p.category==='snacks'?'bg-orange-500':'bg-purple-500'}`}></span>
+                            {p.category}
+                        </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-6 pl-4">
+                    <span className="text-white font-mono font-bold text-lg">${parseFloat(p.price).toFixed(2)}</span>
+                    <button onClick={() => { if(confirm("Delete this product?")) { const next = products.filter(x=>x.id!==p.id); saveProducts(next); } }} className="w-10 h-10 flex items-center justify-center text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors">
+                        <Trash2 size={20}/>
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              {products.length === 0 && (
+                  <div className="text-center py-10 text-slate-600 italic">No products registered.</div>
+              )}
+            </div>
+            
+            <div className="mt-10 pt-10 border-t border-slate-800">
+                <button onClick={()=>{if(confirm('Factory Reset app? All products will be deleted.')){localStorage.clear(); window.location.reload()}}} className="text-red-500 hover:text-red-400 text-sm font-bold py-2 px-4 hover:bg-red-900/10 rounded-lg transition-colors">
+                    Factory Reset (Delete All)
+                </button>
+            </div>
+          </div>
         </div>
-        <h1 className="text-6xl font-bold mb-4">Payment Successful!</h1>
-        <p className="text-2xl opacity-90 mb-12 text-emerald-100">Please take your items.</p>
-        <p className="mt-12 text-lg opacity-60 text-emerald-200">Returning to menu shortly...</p>
-      </div>
-    );
-  }
+      )}
 
-  return null;
+      {/* --- MAIN LAYOUT --- */}
+      
+      {/* 1. LEFT CONTENT AREA (Catalog) */}
+      <div className="flex-1 flex flex-col h-full relative bg-slate-950">
+        <header className="h-20 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 shrink-0 z-10">
+          <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white">Ride Market</h1>
+          </div>
+          <button onClick={() => setShowPinPad(true)} className="w-12 h-12 flex items-center justify-center rounded-full text-slate-500 hover:text-white hover:bg-slate-800 transition-colors">
+              <Settings size={24} />
+          </button>
+        </header>
+
+        {/* Categories */}
+        <div className="p-6 overflow-x-auto shrink-0 no-scrollbar">
+          <div className="flex gap-3 min-w-max">
+            {['all', 'drinks', 'snacks', 'essentials'].map(cat => (
+              <button key={cat} onClick={() => setFilter(cat)} className={`px-6 py-3 rounded-full text-sm font-bold capitalize border transition-all duration-200 ${filter === cat ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20 scale-105' : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                {cat === 'all' ? 'All' : cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Product Grid */}
+        <div className="flex-1 overflow-y-auto p-6 pt-0">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 pb-32">
+            {products.filter(p => filter === 'all' || p.category === filter).map(p => (
+              <ProductCard key={p.id} product={p} cartQuantity={cart.find(i => i.id === p.id)?.quantity || 0} onAdd={() => updateCart(p, 1)} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. RIGHT SIDEBAR (Cart) */}
+      <div className="w-80 md:w-96 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-40 shrink-0 relative">
+        <div className="h-20 border-b border-slate-800 flex items-center px-6 shrink-0 bg-slate-900/95 backdrop-blur">
+            <h2 className="text-xl font-bold flex items-center gap-3 text-white"><ShoppingCart className="text-blue-500" size={24}/> Your Order</h2>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {cart.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-64 text-slate-600 gap-4">
+                  <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center">
+                      <ShoppingCart size={32} className="opacity-50"/>
+                  </div>
+                  <p>Your cart is empty</p>
+              </div>
+          )}
+          {cart.map(i => (
+            <div key={i.id} className="bg-slate-950 p-3 pr-4 rounded-2xl border border-slate-800 flex justify-between items-center animate-in slide-in-from-right-4 duration-200">
+              <div className="flex items-center gap-3">
+                 {i.image ? <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-900"><img src={i.image} className="w-full h-full object-cover"/></div> : null}
+                 <div>
+                    <div className="font-bold text-sm text-white leading-tight">{i.name}</div>
+                    <div className="text-blue-400 font-mono text-xs mt-0.5">${(i.price*i.quantity).toFixed(2)}</div>
+                 </div>
+              </div>
+              <div className="flex items-center gap-3 bg-slate-900 rounded-xl p-1 border border-slate-800 shadow-sm">
+                <button onClick={()=>updateCart(i, -1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"><Minus size={14}/></button>
+                <span className="font-bold w-4 text-center text-sm">{i.quantity}</span>
+                <button onClick={()=>updateCart(i, 1)} className="w-8 h-8 flex items-center justify-center rounded-lg text-blue-400 hover:text-white hover:bg-blue-600 transition-colors"><Plus size={14}/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-6 bg-slate-900 border-t border-slate-800 shrink-0 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+          <div className="flex justify-between text-xl font-bold mb-6 text-white">
+              <span className="text-slate-400">Total</span>
+              <span>${cartTotal.toFixed(2)}</span>
+          </div>
+          <button 
+            onClick={() => { if(cart.length > 0) setShowPayment(true); }} 
+            disabled={cart.length===0} 
+            className={`w-full py-5 rounded-2xl font-bold text-xl shadow-lg transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-3 ${cart.length===0 ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/30'}`}
+          >
+            {cart.length === 0 ? 'Empty Cart' : 'Checkout'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export default KioscoApp;
+export default function AppWrapper() { return <ErrorBoundary><KioscoApp /></ErrorBoundary>; }
