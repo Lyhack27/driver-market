@@ -48,7 +48,7 @@ class ErrorBoundary extends Component {
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#0f1115] text-white p-8 text-center z-[9999]">
           <AlertTriangle size={64} className="text-red-500 mb-6" />
           <h1 className="text-2xl font-bold mb-2">System Error</h1>
-          <button onClick={this.reset} className="bg-red-600 px-8 py-4 rounded-xl font-bold mt-6">REINICIAR</button>
+          <button onClick={this.reset} className="bg-red-600 px-8 py-4 rounded-xl font-bold mt-6">REBOOT SYSTEM</button>
         </div>
       );
     }
@@ -69,13 +69,13 @@ const loadData = (key, fallback) => {
 const saveData = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) { alert("Memoria llena"); }
+  } catch (e) { alert("Memory Full"); }
 };
 
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     if (!file) return reject("No file");
-    if (file.size > 8 * 1024 * 1024) return reject("Muy grande (>8MB)");
+    if (file.size > 8 * 1024 * 1024) return reject("Too large (>8MB)");
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (e) => {
@@ -104,7 +104,6 @@ const ProductCard = ({ item, qty, onAdd }) => (
   <button onClick={onAdd} className="bg-[#1a1f27] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 active:scale-[.98] transition-all shadow-lg relative group overflow-hidden text-left h-full">
     {qty > 0 && <div className="absolute top-3 right-3 bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shadow-lg z-10">{qty}</div>}
     {item.image ? (
-      // CAMBIO 2: object-contain y p-2 para que la imagen se ajuste y se vea presentable
       <div className="w-full h-32 rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-inner relative">
         <img src={item.image} className="w-full h-full object-contain p-2" alt={item.name} />
       </div>
@@ -155,7 +154,8 @@ const PinPad = ({ onCancel, onComplete, title }) => {
   );
 };
 
-const PaymentSignal = () => (
+// --- SEÑAL DE PAGO CON BOTÓN CANCELAR ---
+const PaymentSignal = ({ onCancel }) => (
   <div className="fixed top-0 right-0 w-full md:w-1/2 h-full bg-[#0f1115]/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center border-l border-emerald-500/30">
     <div className="relative flex items-center justify-center">
       <div className="absolute w-64 h-64 bg-emerald-500/20 rounded-full animate-signal"></div>
@@ -164,12 +164,20 @@ const PaymentSignal = () => (
          <Wifi size={64} className="text-emerald-400" />
       </div>
     </div>
-    <h2 className="text-3xl font-bold text-white mt-12 tracking-tight">Conectando a Square...</h2>
-    <p className="text-emerald-400 mt-4 font-medium animate-pulse">Continúe en la terminal de pago</p>
+    <h2 className="text-3xl font-bold text-white mt-12 tracking-tight">Connecting to Square...</h2>
+    <p className="text-emerald-400 mt-4 font-medium animate-pulse mb-10">Please follow instructions on terminal</p>
+    
+    {/* BOTÓN CANCELAR OPERACIÓN */}
+    <button 
+      onClick={onCancel}
+      className="px-6 py-3 rounded-xl border border-red-500/30 text-red-400 font-bold hover:bg-red-900/20 hover:text-red-300 transition-all text-sm active:scale-95 flex items-center gap-2"
+    >
+      <X size={18} /> Cancel Operation
+    </button>
   </div>
 );
 
-// NUEVO: Pantalla de Éxito Real
+// --- PANTALLA DE ÉXITO ---
 const SuccessScreen = ({ onClose }) => (
   <div className="fixed inset-0 bg-[#0f1115] z-[10000] flex flex-col items-center justify-center p-8 animate-pop">
     <div className="w-32 h-32 bg-emerald-500 rounded-full flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(16,185,129,0.5)]">
@@ -195,7 +203,6 @@ const KioskApp = () => {
   const [showAdmin, setShowAdmin] = useState(false);
   const [filter, setFilter] = useState("all");
   
-  // Acción protegida
   const [pendingAction, setPendingAction] = useState(null); 
   const [targetId, setTargetId] = useState(null);
   
@@ -205,12 +212,10 @@ const KioskApp = () => {
   const [newItem, setNewItem] = useState({ name: "", price: "", category: "drinks", image: null });
   const fileRef = useRef(null);
 
-  // INIT & HANDLE PAYMENT CALLBACK
   useEffect(() => {
     const cfg = loadData("kiosk_cfg", null);
     const prd = loadData("kiosk_products", []);
     
-    // Cargar carrito pendiente si existe (por si recargó la página al volver de Square)
     const savedCart = loadData("kiosk_pending_cart", []);
     if (savedCart.length > 0) setCart(savedCart);
 
@@ -219,22 +224,17 @@ const KioskApp = () => {
       { id: 2, name: "Protein Bar", price: 2.50, category: "snacks", image: null },
     ];
 
-    // CAMBIO 3: Verificar respuesta de Square en la URL
     const urlParams = new URLSearchParams(window.location.search);
-    const squareData = urlParams.get('data'); // Square devuelve un JSON string en 'data'
+    const squareData = urlParams.get('data'); 
 
     if (squareData) {
       try {
         const response = JSON.parse(squareData);
-        // Verificamos si el status es 'ok' (puede variar según versión API, usualmente es 'status':'ok' o error_code null)
-        if (response.status === 'ok' || !response.error_code) {
-          setPaymentSuccess(true); // Activar pantalla de éxito
-          saveData("kiosk_pending_cart", []); // Limpiar backup
-          setCart([]); // Limpiar carrito actual
-        } else {
-          alert("Payment Failed or Cancelled");
+        if (response.status === 'ok' || (response.error_code === undefined && response.status !== 'error')) {
+          setPaymentSuccess(true); 
+          saveData("kiosk_pending_cart", []); 
+          setCart([]); 
         }
-        // Limpiar URL para que no se procese de nuevo al refrescar
         window.history.replaceState({}, document.title, window.location.pathname);
       } catch (e) {
         console.error("Error parsing Square response", e);
@@ -256,29 +256,23 @@ const KioskApp = () => {
   const handlePay = () => {
     if (cart.length === 0) return;
     
-    // 1. Guardar estado del carrito antes de salir de la app
     saveData("kiosk_pending_cart", cart);
-    setIsPaying(true);
+    setIsPaying(true); 
 
-    // 2. Construir URL con Callback
     setTimeout(() => {
       const totalCents = Math.round(cart.reduce((a, b) => a + b.price * b.quantity, 0) * 100);
-      // La callback_url debe ser la URL actual donde está hosteada la app
       const callbackUrl = window.location.href; 
 
       const squareUrl = `square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify({
         amount_money: { amount: totalCents, currency_code: "USD" },
-        callback_url: callbackUrl, // Square volverá aquí con el resultado
+        callback_url: callbackUrl, 
         client_id: config?.squareAppId || "test",
         version: "1.3",
-        notes: "Ride Market Order",
+        notes: "Order Payment",
         options: { supported_tender_types: ["CREDIT_CARD","CONTACTLESS","CASH"] }
       }))}`;
       
       window.location.href = squareUrl;
-      
-      // No reseteamos el carrito aquí, esperamos a que vuelva la respuesta en useEffect
-      setTimeout(() => setIsPaying(false), 3000); 
     }, 1500);
   };
 
@@ -295,14 +289,13 @@ const KioskApp = () => {
         setProducts(next);
         saveData("kiosk_products", next);
     } else if (pendingAction === 'upload_image') {
-        // CAMBIO 1: Ejecutar click del input file tras PIN correcto
         if (fileRef.current) fileRef.current.click();
     }
     setPendingAction(null); setTargetId(null); setShowPin(false);
   };
 
   const requestAdd = () => {
-      if (!newItem.name.trim() || !newItem.price) return alert("Faltan datos");
+      if (!newItem.name.trim() || !newItem.price) return alert("Missing Data");
       setPendingAction('add'); setShowPin(true);
   };
 
@@ -310,7 +303,6 @@ const KioskApp = () => {
       setTargetId(id); setPendingAction('delete'); setShowPin(true);
   };
 
-  // CAMBIO 1: Función para pedir PIN antes de upload
   const requestUploadImage = () => {
       setPendingAction('upload_image'); setShowPin(true);
   };
@@ -337,7 +329,7 @@ const KioskApp = () => {
 
   const total = cart.reduce((a, b) => a + b.price * b.quantity, 0);
 
-  if (view === "loading") return <div className="h-screen flex items-center justify-center bg-[#0f1115] text-white">Loading...</div>;
+  if (view === "loading") return <div className="h-screen flex items-center justify-center bg-[#0f1115] text-white">Loading System...</div>;
 
   if (view === "setup") return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#0f1115] px-4">
@@ -358,10 +350,9 @@ const KioskApp = () => {
     <div className="flex h-screen bg-[#0f1115] text-white overflow-hidden font-sans relative">
       <style>{styles}</style>
       
-      {/* ANIMACIÓN DE SEÑAL DE PAGO */}
-      {isPaying && <PaymentSignal />}
-
-      {/* PANTALLA DE ÉXITO REAL */}
+      {/* PASAMOS LA FUNCION DE CANCELAR AL COMPONENTE */}
+      {isPaying && <PaymentSignal onCancel={() => setIsPaying(false)} />}
+      
       {paymentSuccess && <SuccessScreen onClose={() => setPaymentSuccess(false)} />}
 
       {showPin && <PinPad title={pendingAction === 'add' ? "Authorize Add" : pendingAction === 'upload_image' ? "Authorize Upload" : "Authorize Delete"} onCancel={() => { setShowPin(false); setPendingAction(null); }} onComplete={(p) => { if (p === config.pin) executeProtectedAction(); else alert("Incorrect PIN"); }} />}
@@ -381,7 +372,6 @@ const KioskApp = () => {
                 <select className="bg-[#0f1115] border border-white/5 p-4 rounded-xl outline-none" value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}><option value="drinks">Drinks</option><option value="snacks">Snacks</option><option value="essentials">Essentials</option></select>
               </div>
               <div className="flex gap-4">
-                 {/* CAMBIO 1: Botón Upload pide PIN ahora */}
                  <button onClick={requestUploadImage} className="flex-1 py-4 rounded-xl border border-dashed border-white/10 flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:border-blue-500 transition-all"><Upload size={20} /> {newItem.image ? "Image Ready" : "Upload Image"}</button>
                  <input type="file" hidden ref={fileRef} onChange={handleImage} />
                  <button onClick={requestAdd} className="px-8 bg-blue-600 rounded-xl font-bold flex items-center gap-2"><Lock size={16}/> Save</button>
