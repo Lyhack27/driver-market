@@ -1,0 +1,477 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { ShoppingCart, Plus, Minus, Trash2, ChevronLeft, CheckCircle, Zap, Cookie, Smile, Sparkles, Wind, CreditCard, ExternalLink, Settings, Save, X, Upload, Maximize, Minimize, Lock, RefreshCw, LogOut } from 'lucide-react';
+
+// ==============================================
+// 1. COMPONENTE DE INSTALACIÓN (SetupView)
+// ==============================================
+// Este componente está listo para ir en: src/views/SetupView.jsx
+// Recibe 'onComplete' para devolver la configuración al padre.
+
+const SetupView = ({ onComplete }) => {
+  const [form, setForm] = useState({ pin: "", confirmPin: "", squareId: "" });
+  const [error, setError] = useState("");
+
+  const handleNumberInput = (field, value) => {
+    // Solo permitir números
+    const numericValue = value.replace(/[^0-9]/g, '');
+    setForm(prev => ({ ...prev, [field]: numericValue }));
+    setError(""); // Limpiar error al escribir
+  };
+
+  const handleSubmit = () => {
+    // 1. Validaciones
+    if (form.pin.length !== 4) return setError("PIN must be exactly 4 digits.");
+    if (form.pin !== form.confirmPin) return setError("PINs do not match.");
+    if (!form.squareId.trim()) return setError("Square Application ID is required.");
+
+    // 2. Preparar objeto de configuración
+    const newConfig = {
+      pin: form.pin,
+      squareAppId: form.squareId.trim(),
+      squareLocationId: "" // Campo opcional para futuro
+    };
+
+    // 3. Enviar al Padre (Conexión)
+    onComplete(newConfig);
+  };
+
+  return (
+    <div className="h-screen bg-slate-950 flex items-center justify-center p-6 font-sans animate-in fade-in duration-500">
+      <div className="max-w-md w-full bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden">
+        
+        {/* Fondo decorativo */}
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-purple-600"></div>
+
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-slate-700 shadow-lg">
+            <Settings className="text-blue-500 w-8 h-8 animate-spin-slow" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">System Setup</h1>
+          <p className="text-slate-400 mt-2 text-sm">First time configuration required.</p>
+        </div>
+
+        <div className="space-y-6">
+          {/* PIN INPUT */}
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Admin PIN (4 Digits)</label>
+            <div className="flex gap-4">
+              <input 
+                type="password" maxLength={4}
+                value={form.pin}
+                onChange={e => handleNumberInput('pin', e.target.value)}
+                className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl p-4 text-center text-2xl tracking-[0.5em] text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder-slate-800"
+                placeholder="••••"
+              />
+              <input 
+                type="password" maxLength={4}
+                value={form.confirmPin}
+                onChange={e => handleNumberInput('confirmPin', e.target.value)}
+                className={`w-1/2 bg-slate-950 border rounded-xl p-4 text-center text-2xl tracking-[0.5em] text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder-slate-800 ${
+                  form.confirmPin && form.pin !== form.confirmPin ? 'border-red-500/50' : 'border-slate-700'
+                }`}
+                placeholder="••••"
+              />
+            </div>
+          </div>
+
+          {/* SQUARE ID INPUT */}
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Square Application ID</label>
+            <div className="relative group">
+              <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={20}/>
+              <input 
+                type="text"
+                value={form.squareId}
+                onChange={e => setForm(prev => ({ ...prev, squareId: e.target.value }))}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pl-12 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono text-sm"
+                placeholder="sq0idp-..."
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">
+              Found in your Square Developer Dashboard.
+            </p>
+          </div>
+
+          {/* MENSAJES DE ERROR */}
+          {error && (
+            <div className="bg-red-900/20 border border-red-900/50 p-3 rounded-lg flex items-center gap-2 text-red-400 text-sm animate-pulse">
+              <X size={16} />
+              {error}
+            </div>
+          )}
+
+          {/* BOTÓN DE ACCIÓN */}
+          <button 
+            onClick={handleSubmit}
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
+          >
+            <Save size={20} />
+            Save & Launch Kiosk
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// ==============================================
+// 2. DATOS Y COMPONENTES AUXILIARES
+// ==============================================
+
+const DEFAULT_PRODUCTS = [
+  { id: 1, name: "Monster Energy", price: 3.50, category: "drinks", color: "bg-emerald-900/40 text-emerald-300", iconType: "zap", image: null, imageFit: 'contain' },
+  { id: 2, name: "Protein Bar", price: 2.50, category: "snacks", color: "bg-orange-900/40 text-orange-300", iconType: "cookie", image: null, imageFit: 'contain' },
+  { id: 3, name: "Assorted Sweets", price: 2.00, category: "snacks", color: "bg-pink-900/40 text-pink-300", iconType: "smile", image: null, imageFit: 'contain' },
+  { id: 4, name: "Cool Mints", price: 1.50, category: "snacks", color: "bg-cyan-900/40 text-cyan-300", iconType: "sparkles", image: null, imageFit: 'contain' },
+  { id: 5, name: "Axe Spray (Men)", price: 5.00, category: "essentials", color: "bg-slate-700/50 text-slate-300", iconType: "wind", image: null, imageFit: 'contain' },
+  { id: 6, name: "Axe Spray (Women)", price: 5.00, category: "essentials", color: "bg-purple-900/40 text-purple-300", iconType: "wind", image: null, imageFit: 'contain' },
+];
+
+const getIcon = (type, className) => {
+  switch(type) {
+    case 'zap': return <Zap className={className} />;
+    case 'cookie': return <Cookie className={className} />;
+    case 'smile': return <Smile className={className} />;
+    case 'sparkles': return <Sparkles className={className} />;
+    case 'wind': return <Wind className={className} />;
+    default: return <Zap className={className} />;
+  }
+};
+
+const ProductCard = ({ product, cartQuantity, onAdd, isPreview = false }) => {
+  return (
+    <div 
+      onClick={!isPreview ? onAdd : undefined}
+      className={`bg-slate-900 rounded-2xl p-4 lg:p-6 shadow-lg border border-slate-800 transition-all flex flex-col items-center text-center h-56 lg:h-64 justify-between relative group ${
+        !isPreview ? 'cursor-pointer hover:border-blue-500/50 hover:bg-slate-800 active:scale-95' : 'opacity-100 cursor-default pointer-events-none'
+      }`}
+    >
+      {!isPreview && cartQuantity > 0 && (
+        <div className="absolute top-3 right-3 bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-lg shadow-blue-900/50 animate-bounce-short border border-blue-400">
+          {cartQuantity}
+        </div>
+      )}
+      
+      <div className={`w-24 h-24 lg:w-28 lg:h-28 rounded-full flex items-center justify-center mb-2 overflow-hidden ${product.image ? 'bg-transparent' : product.color}`}>
+        {product.image ? (
+          <img 
+            src={product.image} 
+            alt={product.name} 
+            className={`w-full h-full ${product.imageFit === 'cover' ? 'object-cover' : 'object-contain drop-shadow-lg'}`} 
+          />
+        ) : (
+          getIcon(product.iconType, "w-10 h-10 lg:w-12 lg:h-12 opacity-90")
+        )}
+      </div>
+
+      <div>
+        <h3 className="font-bold text-lg lg:text-xl text-slate-100 leading-tight mb-1 line-clamp-2">
+          {product.name || "Product Name"}
+        </h3>
+        <p className="text-slate-400 font-medium">
+          ${product.price ? parseFloat(product.price).toFixed(2) : "0.00"}
+        </p>
+      </div>
+
+      <button className={`mt-2 w-full py-2 bg-slate-800 text-blue-400 rounded-lg font-semibold text-sm lg:text-base transition-colors border border-slate-700 ${!isPreview ? 'group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500' : ''}`}>
+        Add to Order
+      </button>
+    </div>
+  );
+};
+
+const PinPad = ({ onComplete, onCancel, title = "Enter Admin PIN" }) => {
+  const [pin, setPin] = useState("");
+  const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "del"];
+
+  const handlePress = (val) => {
+    if (val === "del") {
+      setPin(prev => prev.slice(0, -1));
+    } else if (val !== "") {
+      if (pin.length < 4) {
+        const newPin = pin + val;
+        setPin(newPin);
+        if (newPin.length === 4) setTimeout(() => onComplete(newPin), 300);
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+      <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl max-w-sm w-full">
+        <h3 className="text-xl font-bold text-slate-200 text-center mb-6">{title}</h3>
+        <div className="flex justify-center gap-4 mb-8">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className={`w-4 h-4 rounded-full transition-all ${i < pin.length ? 'bg-blue-500 scale-110' : 'bg-slate-700'}`} />
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          {numbers.map((num, idx) => (
+            <button
+              key={idx}
+              onClick={() => handlePress(num)}
+              className={`h-16 rounded-full text-2xl font-bold flex items-center justify-center transition-all
+                ${num === "" ? 'invisible' : 
+                  num === "del" ? 'bg-red-900/20 text-red-400 hover:bg-red-900/40' : 
+                  'bg-slate-800 text-slate-200 hover:bg-slate-700 active:scale-95 border border-slate-700'}`}
+            >
+              {num === "del" ? <X size={24}/> : num}
+            </button>
+          ))}
+        </div>
+        {onCancel && (
+           <button onClick={onCancel} className="w-full mt-6 py-3 text-slate-500 hover:text-slate-300 font-medium transition-colors">
+             Cancel
+           </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ==============================================
+// 3. APLICACIÓN PRINCIPAL (App.jsx)
+// ==============================================
+
+const KioscoApp = () => {
+  // -- ESTADOS GLOBALES --
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+  const [adminConfig, setAdminConfig] = useState({ pin: null, squareAppId: "" });
+
+  // Estados de la App
+  const [cart, setCart] = useState([]);
+  const [view, setView] = useState('loading');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Estado temporal para formularios
+  const [newProduct, setNewProduct] = useState({ name: '', price: '', category: 'drinks', image: null, imageFit: 'contain' });
+  const fileInputRef = useRef(null);
+
+  // -- EFECTOS --
+  useEffect(() => {
+    const storedConfig = localStorage.getItem('kiosco_config');
+    const storedProducts = localStorage.getItem('kiosco_products');
+
+    if (storedConfig) {
+      setAdminConfig(JSON.parse(storedConfig));
+      if (storedProducts) setProducts(JSON.parse(storedProducts));
+      setIsInitialized(true);
+      setView('menu');
+    } else {
+      setIsInitialized(false);
+      setView('setup');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized) localStorage.setItem('kiosco_products', JSON.stringify(products));
+  }, [products, isInitialized]);
+
+  // -- CONEXIÓN CON SETUP --
+  // Esta es la función que "empata" el componente de instalación con la app principal
+  const handleFinishSetup = (config) => {
+    setAdminConfig(config);
+    localStorage.setItem('kiosco_config', JSON.stringify(config));
+    localStorage.setItem('kiosco_products', JSON.stringify(products));
+    
+    setIsInitialized(true);
+    setView('menu'); // Transición al menú principal
+  };
+
+  const handleFactoryReset = () => {
+    if (window.confirm("WARNING: This will delete all settings. Confirm?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  // -- LOGICA DE NEGOCIO (Admin, Carrito, Pago) --
+  // ... (Esta lógica permanece en App.jsx para manejar el estado global)
+  const verifyPin = (enteredPin) => enteredPin === adminConfig.pin ? setView('admin') : alert("Incorrect PIN");
+  
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setNewProduct(prev => ({ ...prev, image: reader.result }));
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddProduct = () => {
+    if (!newProduct.name || !newProduct.price) return;
+    let colorClass = "bg-slate-700/50 text-slate-300";
+    if (newProduct.category === 'drinks') colorClass = "bg-blue-900/40 text-blue-300";
+    if (newProduct.category === 'snacks') colorClass = "bg-orange-900/40 text-orange-300";
+    if (newProduct.category === 'essentials') colorClass = "bg-purple-900/40 text-purple-300";
+
+    setProducts([...products, { ...newProduct, id: Date.now(), color: colorClass, iconType: 'zap' }]);
+    setNewProduct({ name: '', price: '', category: 'drinks', image: null, imageFit: 'contain' });
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  const addToCart = (product) => {
+    setCart(prev => {
+      const ex = prev.find(i => i.id === product.id);
+      return ex ? prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...product, quantity: 1 }];
+    });
+  };
+  
+  const updateQuantity = (id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0));
+  const removeFromCart = (id) => setCart(prev => prev.filter(i => i.id !== id));
+
+  const handleSquarePayment = () => {
+    const params = {
+      amount_money: { amount: Math.round(cartTotal * 100), currency_code: "USD" },
+      callback_url: "https://google.com",
+      client_id: adminConfig.squareAppId,
+      version: "1.3",
+      notes: "Ride Market Order",
+      options: { supported_tender_types: ["CREDIT_CARD", "CONTACTLESS", "CASH"] }
+    };
+    window.location.href = `square-commerce-v1://payment/create?data=${encodeURIComponent(JSON.stringify(params))}`;
+    setIsProcessing(true);
+    setTimeout(() => setIsProcessing(false), 3000);
+  };
+
+  // --- RENDERIZADO PRINCIPAL ---
+
+  if (view === 'loading') return <div className="h-screen bg-slate-950 flex items-center justify-center text-slate-500">Loading System...</div>;
+
+  // -> AQUÍ SE USA EL COMPONENTE DE INSTALACIÓN
+  if (view === 'setup') {
+    return <SetupView onComplete={handleFinishSetup} />;
+  }
+
+  if (view === 'pin_check') return <PinPad onComplete={verifyPin} onCancel={() => setView('menu')} />;
+
+  if (view === 'admin') {
+    return (
+      <div className="min-h-screen bg-slate-950 p-4 lg:p-8">
+        <div className="max-w-6xl mx-auto bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col h-[90vh]">
+          <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center flex-none">
+             <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-100"><Lock className="w-6 h-6 text-blue-500" /> Admin Panel</h2>
+             <button onClick={() => setView('menu')} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2 rounded-full font-semibold transition-colors border border-slate-700 flex items-center gap-2"><LogOut size={18} /> Exit</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="xl:col-span-2 space-y-8">
+                 <div className="bg-slate-950/50 p-6 rounded-2xl border border-slate-800">
+                    <div className="flex gap-4 items-end mb-4">
+                       <div className="flex-1"><label className="block text-xs text-slate-500 mb-1">Name</label><input type="text" value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white" placeholder="Item name" /></div>
+                       <div className="w-24"><label className="block text-xs text-slate-500 mb-1">Price</label><input type="number" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white" placeholder="0.00" /></div>
+                       <div className="w-32"><label className="block text-xs text-slate-500 mb-1">Category</label><select value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white"><option value="drinks">Drinks</option><option value="snacks">Snacks</option><option value="essentials">Essentials</option></select></div>
+                    </div>
+                    <div className="flex gap-4">
+                       <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-slate-800 border border-slate-700 border-dashed text-slate-400 rounded-lg p-2 flex items-center justify-center gap-2 hover:text-white"><Upload size={16} /> {newProduct.image ? "Image Loaded" : "Upload Image"}</button>
+                       <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+                       <button onClick={handleAddProduct} className="bg-blue-600 text-white px-6 rounded-lg font-bold hover:bg-blue-500">Add</button>
+                    </div>
+                 </div>
+                 <div className="bg-slate-950/30 rounded-xl border border-slate-800 overflow-hidden">
+                    <div className="p-4 bg-slate-900 text-slate-500 text-xs uppercase font-bold flex justify-between"><span>Product List</span><span>{products.length} Items</span></div>
+                    {products.map(p => (
+                       <div key={p.id} className="flex justify-between p-4 border-b border-slate-800 last:border-0 items-center hover:bg-slate-900/50">
+                          <div className="flex items-center gap-3"><div className="w-8 h-8 rounded bg-slate-800 overflow-hidden">{p.image ? <img src={p.image} className="w-full h-full object-cover"/> : getIcon(p.iconType, "p-1 text-slate-500")}</div><span className="text-slate-300">{p.name}</span></div>
+                          <div className="flex items-center gap-4"><span className="text-slate-400">${p.price.toFixed(2)}</span><button onClick={() => setProducts(products.filter(i => i.id !== p.id))} className="text-red-400 hover:text-red-300"><Trash2 size={18}/></button></div>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+              <div className="space-y-8">
+                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-6">
+                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Square Connection</label><div className="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center gap-3"><CreditCard className="text-green-500" /><span className="text-sm text-white font-mono truncate">{adminConfig.squareAppId}</span></div></div>
+                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Security</label><div className="flex items-center justify-between bg-slate-900 p-3 rounded-lg border border-slate-800"><span className="text-slate-300 text-sm">Admin PIN</span><span className="text-slate-500 font-mono">****</span></div></div>
+                    <div className="pt-6 border-t border-slate-700"><button onClick={handleFactoryReset} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 py-3 rounded-lg font-bold flex items-center justify-center gap-2"><RefreshCw size={18} /> Reset App</button></div>
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'menu') {
+    const filteredProducts = categoryFilter === 'all' ? products : products.filter(p => p.category === categoryFilter);
+    return (
+      <div className="flex h-screen bg-slate-950 font-sans overflow-hidden text-slate-200">
+        <div className="flex-1 flex flex-col h-full">
+          <header className="bg-slate-900 p-4 lg:p-6 shadow-md z-10 flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-slate-800">
+            <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-start">
+              <div><h1 className="text-2xl lg:text-3xl font-bold text-slate-100 tracking-tight">Ride Market</h1><p className="text-sm lg:text-base text-slate-400">Refresh yourself during the ride</p></div>
+              <button onClick={() => setView('pin_check')} className="text-slate-600 hover:text-slate-400 p-2"><Settings size={24} /></button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto w-full lg:w-auto pb-2 lg:pb-0">
+               {['all', 'drinks', 'snacks', 'essentials'].map(cat => (
+                 <button key={cat} onClick={() => setCategoryFilter(cat)} className={`capitalize px-4 py-2 rounded-full border ${categoryFilter === cat ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>{cat}</button>
+               ))}
+            </div>
+          </header>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 pb-24">
+              {filteredProducts.map(product => <ProductCard key={product.id} product={product} cartQuantity={cart.find(i => i.id === product.id)?.quantity || 0} onAdd={() => addToCart(product)} />)}
+            </div>
+          </div>
+        </div>
+        <div className="w-80 lg:w-96 bg-slate-900 shadow-2xl flex flex-col h-full z-20 border-l border-slate-800">
+          <div className="p-6 bg-slate-900 border-b border-slate-800"><h2 className="text-2xl font-bold flex items-center gap-2 text-slate-100"><ShoppingCart className="w-6 h-6 text-blue-500" /> Your Order</h2></div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {cart.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-4 opacity-60"><ShoppingCart size={64} strokeWidth={1.5} /><p className="text-lg text-center">Your cart is empty.<br/>Tap items to start.</p></div> : 
+              cart.map(item => (
+                <div key={item.id} className="flex items-center justify-between bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-sm">
+                  <div className="flex-1"><h4 className="font-bold text-slate-200 text-sm lg:text-base">{item.name}</h4><p className="text-blue-400 font-medium">${(item.price * item.quantity).toFixed(2)}</p></div>
+                  <div className="flex items-center gap-2 lg:gap-3 bg-slate-900 rounded-lg p-1 border border-slate-700">
+                    <button onClick={(e) => {e.stopPropagation(); updateQuantity(item.id, -1)}} className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded text-slate-400 hover:text-white"><Minus size={16} /></button>
+                    <span className="font-bold w-4 text-center text-slate-200">{item.quantity}</span>
+                    <button onClick={(e) => {e.stopPropagation(); updateQuantity(item.id, 1)}} className="w-8 h-8 flex items-center justify-center bg-slate-800 rounded text-blue-400 hover:text-blue-300"><Plus size={16} /></button>
+                  </div>
+                  <button onClick={() => removeFromCart(item.id)} className="ml-2 text-slate-600 hover:text-red-400 p-1"><Trash2 size={18} /></button>
+                </div>
+              ))
+            }
+          </div>
+          <div className="p-6 bg-slate-900 border-t border-slate-800 space-y-4">
+            <div className="flex justify-between text-xl font-bold text-slate-100"><span>Total</span><span>${cartTotal.toFixed(2)}</span></div>
+            <button onClick={() => cart.length > 0 && setView('payment')} disabled={cart.length === 0} className={`w-full py-4 rounded-xl text-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all border ${cart.length === 0 ? 'bg-slate-800 text-slate-600 cursor-not-allowed border-slate-700' : 'bg-blue-600 text-white hover:bg-blue-500 border-blue-500'}`}><span>Pay Now</span><ChevronLeft className="rotate-180" /></button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'payment') {
+    return (
+      <div className="h-screen w-screen bg-slate-950 flex items-center justify-center p-6 relative">
+        <button onClick={() => setView('menu')} className="absolute top-8 left-8 bg-slate-800 text-slate-200 p-4 rounded-full flex items-center gap-2 hover:bg-slate-700 border border-slate-700"><ChevronLeft size={32} /> <span className="font-bold text-lg">Back</span></button>
+        <div className="bg-slate-900 w-full max-w-4xl h-[80vh] rounded-3xl overflow-hidden flex shadow-2xl border border-slate-800">
+          <div className="w-1/2 bg-slate-900 p-12 flex flex-col border-r border-slate-800">
+            <h2 className="text-3xl font-bold text-slate-100 mb-8">Summary</h2>
+            <div className="flex-1 overflow-y-auto space-y-4">{cart.map(item => <div key={item.id} className="flex justify-between text-slate-300"><span>{item.quantity}x {item.name}</span><span>${(item.price * item.quantity).toFixed(2)}</span></div>)}</div>
+            <div className="text-4xl font-bold text-blue-400 border-t border-slate-700 pt-4 flex justify-between"><span>Total</span><span>${cartTotal.toFixed(2)}</span></div>
+          </div>
+          <div className="w-1/2 p-12 flex flex-col items-center justify-center text-center bg-slate-950">
+             {isProcessing ? <div className="text-slate-200 text-2xl font-bold animate-pulse">Processing with Square...</div> : 
+               <>
+                 <CreditCard className="w-20 h-20 text-slate-400 mb-6" />
+                 <h2 className="text-3xl text-slate-100 font-bold mb-4">Pay ${cartTotal.toFixed(2)}</h2>
+                 <button onClick={handleSquarePayment} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 mb-4"><ExternalLink size={24}/> Open Square App</button>
+                 <button onClick={() => { setIsProcessing(true); setTimeout(() => { setIsProcessing(false); setView('success'); setCart([]); setTimeout(() => setView('menu'), 5000); }, 2000); }} className="text-slate-600 underline mt-4 text-sm">(Simulate Success)</button>
+               </>
+             }
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'success') return <div className="h-screen w-screen bg-emerald-900 flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in zoom-in duration-500"><div className="bg-white text-emerald-600 rounded-full p-6 mb-8 shadow-2xl animate-bounce"><CheckCircle size={120} /></div><h1 className="text-6xl font-bold mb-4">Payment Successful!</h1></div>;
+
+  return null;
+};
+
+export default KioscoApp;
